@@ -123,6 +123,9 @@
     box-shadow: 0 0 24px color-mix(in srgb, var(--c) 45%, transparent);
   }
   .mic svg { width: 28px; height: 28px; }
+  .sens { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+  .sens input { flex: 1; accent-color: var(--cyan); }
+  .sens output { font: 700 18px Orbitron, sans-serif; color: var(--cyan); width: 2ch; }
   .hint { color: var(--muted); font-size: 15px; margin-top: 4px; }
 
   /* Start screen (browsers need one tap before mic + sound) */
@@ -192,7 +195,11 @@
       <h2>Recent actions</h2>
       <table class="log"><tbody id="log"><tr><td class="empty">Loading…</td></tr></tbody></table>
     </div>
-    <p class="hint">Space bar or the mic button skips the clap.</p>
+    <label class="sens">Clap sensitivity
+      <input type="range" id="sens" min="1" max="10" step="1">
+      <output id="sensOut"></output>
+    </label>
+    <p class="hint">Not hearing your claps? Move it right. Waking by itself? Move it left. Space bar or the mic button skips the clap.</p>
   </aside>
 </main>
 
@@ -205,7 +212,9 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzHlHDXIjceNN8Pq2xADF_o
 const OWNER_SPOKEN = 'Doctor Al Maraqi';
 const WAKE_MS = 15000, COMMAND_MS = 10000, CONFIRM_MS = 8000;
 // Clap tuning (calibration knobs): loudness floor, how much louder than room noise, gap between the two claps
-const CLAP_MIN = 0.3, CLAP_RATIO = 5, CLAP_GAP_MIN = 120, CLAP_GAP_MAX = 700;
+// Sensitivity 1..10 (slider, saved per device) sets the loudness floor: 7 → 0.185, 10 → 0.05
+const CLAP_RATIO = 3, CLAP_GAP_MIN = 120, CLAP_GAP_MAX = 900;
+let clapMin;
 
 const WAKE = /\b(a\.?\s?d\.?\s?s|ads|aids|hades|80s|eighties)\b/i;
 const YES = /\b(yes|yeah|yep|sure|confirm|approve|go ahead|do it|ok|okay)\b/i;
@@ -360,7 +369,7 @@ async function startClapDetector() {
     for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
     document.body.style.setProperty('--lvl', Math.min(peak * 2, 1).toFixed(2));
     const now = performance.now();
-    if (!busy && peak > CLAP_MIN && peak > room * CLAP_RATIO && now - lastPeakAt > CLAP_GAP_MIN) {
+    if (!busy && peak > clapMin && peak > room * CLAP_RATIO && now - lastPeakAt > CLAP_GAP_MIN) {
       lastPeakAt = now;
       const gap = now - firstClapAt;
       if (gap > CLAP_GAP_MIN && gap < CLAP_GAP_MAX) { firstClapAt = 0; wakeUp(); }
@@ -396,6 +405,16 @@ function refresh() {
 }
 
 $('keyIn').hidden = !!store.get();
+function setSens(v) {
+  $('sens').value = v; $('sensOut').textContent = v;
+  clapMin = 0.5 - v * 0.045;
+  try { localStorage.setItem('adsSens', v); } catch (e) {}
+}
+let savedSens = null;
+try { savedSens = localStorage.getItem('adsSens'); } catch (e) {}
+setSens(+savedSens || 7);
+$('sens').oninput = e => setSens(+e.target.value);
+
 $('startBtn').onclick = async () => {
   if (!store.get()) {
     const k = $('keyIn').value.trim();
