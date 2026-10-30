@@ -152,7 +152,7 @@
 <div class="start" id="start">
   <div>
     <div class="mark">JARVIS</div>
-    <p>Allow the microphone once. Then double clap and say “Hey Jarvis”, or use the mic button.</p>
+    <p>Allow the microphone once. Then clap once and say “Hey Jarvis”, or use the mic button.</p>
     <p><input id="keyIn" type="password" placeholder="Portal key" aria-label="Portal key" autocomplete="off"
       style="padding:10px 14px;background:var(--panel);border:1px solid var(--line);width:min(320px,100%)"></p>
     <button class="btn" id="startBtn" style="color:var(--cyan)">Start portal</button>
@@ -174,7 +174,7 @@
       <circle class="heart" cx="100" cy="100" r="22"/>
     </svg>
     <div class="state" id="stateTxt" aria-live="polite">Asleep</div>
-    <p class="said" id="said" aria-live="polite">Double clap to wake me.</p>
+    <p class="said" id="said" aria-live="polite">Clap to wake me.</p>
     <p class="heard" id="heard"></p>
     <div class="confirm" id="confirmBox" hidden>
       <button class="btn yes" id="yesBtn">Yes, approve</button>
@@ -210,15 +210,16 @@
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbzHlHDXIjceNN8Pq2xADF_o_5MdUVKWHxlJDV4diHCwQoFDLJOSNpAiLFn8y-jg6WeQAg/exec';
 const OWNER_SPOKEN = 'Doctor Al Maraqi';
-const WAKE_MS = 15000, COMMAND_MS = 10000, CONFIRM_MS = 8000;
+const WAKE_MS = 15000, AWAKE_MS = 3 * 60 * 1000, CONFIRM_MS = 8000;
 // Clap tuning (calibration knobs): loudness floor, how much louder than room noise, gap between the two claps
 // Sensitivity 1..10 (slider, saved per device) sets the loudness floor: 7 → 0.185, 10 → 0.05
-const CLAP_RATIO = 3, CLAP_GAP_MIN = 120, CLAP_GAP_MAX = 900;
+const CLAP_RATIO = 3, CLAP_GAP_MIN = 120;
 let clapMin;
 
 const WAKE = /\b(jarvis|jarvi|javis|jervis|jarves|travis)\b/i;
 const YES = /\b(yes|yeah|yep|sure|confirm|approve|go ahead|do it|ok|okay)\b/i;
 const NO = /\b(no|nope|cancel|stop|don'?t|wait)\b/i;
+const THANKS = /\b(thank you|thanks|thank u)\b/i;
 const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves']];
 
 const $ = id => document.getElementById(id);
@@ -288,7 +289,7 @@ async function session(fn) {
   catch (err) { setState('error', 'Error'); await say(err.message || String(err)); }
   finally {
     busy = false;
-    setTimeout(() => { if (!busy) setState('sleep', 'Asleep', 'Double clap to wake me.'); }, 2500);
+    setTimeout(() => { if (!busy) setState('sleep', 'Asleep', 'Clap to wake me.'); }, 2500);
   }
 }
 
@@ -298,15 +299,28 @@ const wakeUp = () => session(async () => {
   if (!WAKE.test(t)) return;
   setState('listen', 'Speaking');
   await say(`Welcome back, ${OWNER_SPOKEN}. How can I help?`);
-  await askCommand();
+  await stayAwake();
 });
 
-const micPressed = () => session(() => { setState('listen', 'Speaking'); return say('Yes?').then(askCommand); });
+const micPressed = () => session(() => { setState('listen', 'Speaking'); return say('Yes?').then(stayAwake); });
 
-async function askCommand() {
-  setState('listen', 'Listening for a command');
-  const t = await listen(COMMAND_MS);
-  await handle(t);
+// Awake for AWAKE_MS after the last command or "thank you": no clap or wake word needed.
+// Other speech (people talking nearby) is ignored.
+async function stayAwake() {
+  let until = Date.now() + AWAKE_MS;
+  while (Date.now() < until) {
+    setState('listen', 'Listening', 'Say a command, or “thank you”.');
+    const started = Date.now();
+    const t = await listen(until - Date.now());
+    if (!t && Date.now() - started < 1000) break; // mic stopped working; don't spin
+    const m = MATCH.find(([re]) => re.test(t));
+    if (m) { await runFlow(m[1]); until = Date.now() + AWAKE_MS; }
+    else if (THANKS.test(t)) {
+      setState('listen', 'Speaking');
+      await say('You’re welcome. Anything else for you?');
+      until = Date.now() + AWAKE_MS;
+    }
+  }
 }
 
 async function handle(text) {
@@ -354,7 +368,7 @@ function askConfirm(question) {
   });
 }
 
-// Double-clap detector. Runs in the browser only; no audio is sent anywhere.
+// Clap detector (one clap wakes). Runs in the browser only; no audio is sent anywhere.
 async function startClapDetector() {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
@@ -362,7 +376,7 @@ async function startClapDetector() {
   const ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(stream);
   const proc = ctx.createScriptProcessor(1024, 1, 1); // keeps running when the tab is in the background
-  let room = 0.01, lastPeakAt = 0, firstClapAt = 0;
+  let room = 0.01, lastPeakAt = 0;
   proc.onaudioprocess = e => {
     const buf = e.inputBuffer.getChannelData(0);
     let peak = 0;
@@ -371,9 +385,7 @@ async function startClapDetector() {
     const now = performance.now();
     if (!busy && peak > clapMin && peak > room * CLAP_RATIO && now - lastPeakAt > CLAP_GAP_MIN) {
       lastPeakAt = now;
-      const gap = now - firstClapAt;
-      if (gap > CLAP_GAP_MIN && gap < CLAP_GAP_MAX) { firstClapAt = 0; wakeUp(); }
-      else firstClapAt = now;
+      wakeUp();
     }
     room = room * 0.97 + peak * 0.03;
   };
