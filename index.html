@@ -79,6 +79,11 @@
   .heard { color: var(--muted); max-width: 40ch; min-height: 1.45em; margin: 6px 0 0; font-style: italic; }
 
   .confirm { display: flex; gap: 12px; margin-top: 18px; }
+  .names {
+    margin: 14px 0 0; padding: 10px 14px 10px 36px; max-height: 200px; overflow-y: auto;
+    width: min(420px, 100%); text-align: left; background: var(--panel); border: 1px solid var(--line);
+  }
+  .names[hidden] { display: none; }
   .confirm[hidden] { display: none; }
   .btn {
     padding: 10px 26px; border: 1px solid var(--c); background: transparent; cursor: pointer;
@@ -177,6 +182,7 @@
     <div class="state" id="stateTxt" aria-live="polite">Asleep</div>
     <p class="said" id="said" aria-live="polite">Clap to wake me.</p>
     <p class="heard" id="heard"></p>
+    <ol class="names" id="names" hidden></ol>
     <div class="confirm" id="confirmBox" hidden>
       <button class="btn yes" id="yesBtn">Yes, approve</button>
       <button class="btn" id="noBtn" style="color:var(--text)">Cancel</button>
@@ -397,7 +403,7 @@ async function runFlow(key) {
   const p = await call('previewCommand', key);
   if (!p.count) { setState('done', 'Nothing waiting'); await say(`No ${p.noun} waiting.`); return; }
   setState('confirm', 'Waiting for your answer');
-  if (!await askConfirm(`Found ${p.count} ${p.noun}. Are you sure?`)) {
+  if (!await askConfirm(`Found ${p.count} ${p.noun}${spokenNames(p.names)}. Are you sure?`, p.names)) {
     setState('sleep', 'Cancelled');
     await say('Cancelled. Nothing was changed.');
     return;
@@ -411,18 +417,30 @@ async function runFlow(key) {
 }
 
 // Voice "yes"/"no" or the buttons, whichever comes first. Silence = no.
-function askConfirm(question) {
+// Up to 5 names to read out. The English voice can't read Arabic script, so those stay on screen only.
+const SPOKEN_NAMES = 5;
+function spokenNames(names) {
+  if (!names || !names.length) return '';
+  if (names.some(n => /[\u0600-\u06FF]/.test(n))) return ', names are on the screen';
+  const more = names.length - SPOKEN_NAMES;
+  return ': ' + names.slice(0, SPOKEN_NAMES).join(', ') + (more > 0 ? `, and ${more} more` : '');
+}
+
+function askConfirm(question, names) {
   return new Promise(async done => {
     let finished = false;
     const finish = v => {
       if (finished) return;
       finished = true;
-      $('confirmBox').hidden = true;
+      $('confirmBox').hidden = $('names').hidden = true;
       if (rec) rec.stop();
       done(v);
     };
     $('yesBtn').onclick = () => finish(true);
     $('noBtn').onclick = () => finish(false);
+    $('names').innerHTML = '';
+    (names || []).forEach(n => { const li = document.createElement('li'); li.textContent = n || '(no name)'; $('names').append(li); });
+    $('names').hidden = !(names && names.length);
     $('confirmBox').hidden = false;
     await say(question);
     if (finished) return;
