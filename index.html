@@ -366,7 +366,9 @@ async function refreshFlow() {
   const s = await refresh();
   if (!s) throw new Error('I could not read the sheets.');
   setState('done', 'Up to date');
-  await say(s.commands.map(c => `${c.waiting || 'No'} ${c.noun}`).join(' and ') + ' waiting.');
+  const bad = s.commands.filter(c => typeof c.waiting !== 'number');
+  await say(s.commands.filter(c => !bad.includes(c)).map(c => `${c.waiting || 'No'} ${c.noun}`).join(' and ') + ' waiting.' +
+    bad.map(c => ' ' + c.app).join(''));
 }
 
 async function runFlow(key) {
@@ -380,9 +382,10 @@ async function runFlow(key) {
     return;
   }
   setState('work', 'Approving');
-  const r = await call('runCommand', key);
+  const r = await call('runCommand', key, p.tokens);
   setState('done', 'Done');
-  await say(r.count ? `${r.count} ${r.noun} approved.` : `No ${r.noun} waiting any more.`);
+  await say((r.count ? `${r.count} ${r.noun} approved.` : `No ${r.noun} approved.`) +
+    (r.skipped ? ` ${r.skipped} ${r.skipped === 1 ? 'was' : 'were'} no longer waiting.` : ''));
   refresh();
 }
 
