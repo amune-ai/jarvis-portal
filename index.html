@@ -219,6 +219,7 @@ let clapMin;
 const WAKE = /\b(jarvis|jarvi|javis|jervis|jarves|travis)\b/i;
 const YES = /\b(yes|yeah|yep|sure|confirm|approve|go ahead|do it|ok|okay)\b/i;
 const NO = /\b(no|nope|cancel|stop|don'?t|wait)\b/i;
+const STANDBY = /\bstand\s?-?by\b/i;
 const THANKS = /\b(thank you|thanks|thank u)\b/i;
 const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves']];
 
@@ -309,12 +310,17 @@ const micPressed = () => session(() => { setState('listen', 'Speaking'); return 
 async function stayAwake() {
   let until = Date.now() + AWAKE_MS;
   while (Date.now() < until) {
-    setState('listen', 'Listening', 'Say a command, or “thank you”.');
+    setState('listen', 'Listening', 'Say a command, “thank you”, or “thank you Jarvis, stand by”.');
     const started = Date.now();
     const t = await listen(until - Date.now());
     if (!t && Date.now() - started < 1000) break; // mic stopped working; don't spin
     const m = MATCH.find(([re]) => re.test(t));
     if (m) { await runFlow(m[1]); until = Date.now() + AWAKE_MS; }
+    else if (STANDBY.test(t)) {
+      setState('listen', 'Speaking');
+      await say('Standing by.');
+      break;
+    }
     else if (THANKS.test(t)) {
       setState('listen', 'Speaking');
       await say('You’re welcome. Anything else for you?');
