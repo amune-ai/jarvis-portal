@@ -124,6 +124,7 @@
   }
   .mic svg { width: 28px; height: 28px; }
   .sens { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+  .sens[hidden] { display: none; }
   .sens input { flex: 1; accent-color: var(--cyan); }
   .sens output { font: 700 18px Orbitron, sans-serif; color: var(--cyan); width: 2ch; }
   .hint { color: var(--muted); font-size: 15px; margin-top: 4px; }
@@ -195,11 +196,11 @@
       <h2>Recent actions</h2>
       <table class="log"><tbody id="log"><tr><td class="empty">Loading…</td></tr></tbody></table>
     </div>
-    <label class="sens">Clap sensitivity
+    <label class="sens" id="sensRow">Clap sensitivity
       <input type="range" id="sens" min="1" max="10" step="1">
       <output id="sensOut"></output>
     </label>
-    <p class="hint">Not hearing your claps? Move it right. Waking by itself? Move it left. Space bar or the mic button skips the clap.</p>
+    <p class="hint" id="clapHint">Not hearing your claps? Move it right. Waking by itself? Move it left. Space bar or the mic button skips the clap.</p>
   </aside>
 </main>
 
@@ -225,6 +226,9 @@ const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves']];
 
 const $ = id => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+// Phones: Android gives the mic to one user at a time, so the clap detector would starve speech
+// recognition. Phones use the mic button only, and each listen is one sentence.
+const PHONE = matchMedia('(pointer: coarse)').matches;
 let busy = false, rec = null;
 
 function setState(state, label, said) {
@@ -268,14 +272,17 @@ function listen(ms, stopWhen) {
     if (!SR) { $('heard').textContent = 'Voice needs Chrome or Edge. Use the buttons or type.'; return done(''); }
     let text = '';
     rec = new SR();
-    rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+    rec.lang = 'en-US'; rec.continuous = !PHONE; rec.interimResults = true;
     const r = rec, t = setTimeout(() => r.stop(), ms);
     r.onresult = e => {
       text = [...e.results].map(x => x[0].transcript).join(' ').trim();
       $('heard').textContent = '“' + text + '”';
       if (stopWhen ? stopWhen(text) : e.results[e.results.length - 1].isFinal) r.stop();
     };
-    r.onerror = e => { if (e.error === 'not-allowed') $('heard').textContent = 'Microphone is blocked. Allow it in the address bar.'; };
+    r.onerror = e => {
+      if (e.error === 'not-allowed') $('heard').textContent = 'Microphone is blocked. Allow it in the address bar.';
+      else if (e.error !== 'no-speech' && e.error !== 'aborted') $('heard').textContent = 'Voice error: ' + e.error;
+    };
     r.onend = () => { clearTimeout(t); rec = null; done(text); };
     r.start();
   });
@@ -290,7 +297,7 @@ async function session(fn) {
   catch (err) { setState('error', 'Error'); await say(err.message || String(err)); }
   finally {
     busy = false;
-    setTimeout(() => { if (!busy) setState('sleep', 'Asleep', 'Clap to wake me.'); }, 2500);
+    setTimeout(() => { if (!busy) setState('sleep', 'Asleep', PHONE ? 'Tap the mic to talk.' : 'Clap to wake me.'); }, 2500);
   }
 }
 
@@ -313,7 +320,8 @@ async function stayAwake() {
     setState('listen', 'Listening', 'Say a command, “thank you”, or “stand by Jarvis”.');
     const started = Date.now();
     const t = await listen(until - Date.now());
-    if (!t && Date.now() - started < 1000) break; // mic stopped working; don't spin
+    // Silence on a phone ends the session (each new listen beeps on Android); on desktop only a dead mic does
+    if (!t && (PHONE || Date.now() - started < 1000)) break;
     const m = MATCH.find(([re]) => re.test(t));
     if (m) { await runFlow(m[1]); until = Date.now() + AWAKE_MS; }
     else if (STANDBY.test(t)) {
@@ -443,6 +451,11 @@ $('startBtn').onclick = async () => {
   $('start').hidden = true;
   refresh();
   speechSynthesis.getVoices();
+  if (PHONE) {
+    $('sensRow').hidden = $('clapHint').hidden = true;
+    setState('sleep', 'Asleep', 'Tap the mic to talk.');
+    return;
+  }
   try { await startClapDetector(); }
   catch (e) { $('heard').textContent = `No microphone access (${e.name}: ${e.message}). Clap is off; use the buttons or type.`; }
 };
