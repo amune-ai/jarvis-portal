@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A D S Command Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --void: #03060C;
+    --panel: #081220;
+    --line: #10304A;
+    --text: #CFEFFF;
+    --muted: #6F93AB;
+    --cyan: #3DE8FF;
+    --amber: #FFB547;
+    --green: #4CFFA0;
+    --red: #FF5C6C;
+    --c: var(--cyan);   /* current state colour */
+    --lvl: 0;           /* live mic level 0..1 */
+  }
+  body[data-state="confirm"] { --c: var(--amber); }
+  body[data-state="done"]    { --c: var(--green); }
+  body[data-state="error"]   { --c: var(--red); }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background:
+      radial-gradient(circle at 30% 45%, color-mix(in srgb, var(--c) 9%, transparent), transparent 55%),
+      repeating-linear-gradient(0deg, transparent 0 39px, #0A1A2A 39px 40px),
+      repeating-linear-gradient(90deg, transparent 0 39px, #0A1A2A 39px 40px),
+      var(--void);
+    color: var(--text);
+    font: 500 18px/1.45 Rajdhani, system-ui, sans-serif;
+  }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+  header {
+    display: flex; align-items: baseline; gap: 16px;
+    padding: 20px 28px; border-bottom: 1px solid var(--line);
+  }
+  .mark { font: 700 22px Orbitron, sans-serif; letter-spacing: .5em; color: var(--cyan); }
+  .who { color: var(--muted); margin-left: auto; }
+
+  main {
+    display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr);
+    gap: 28px; padding: 28px; max-width: 1240px; margin: 0 auto;
+  }
+
+  /* ── The core: the one bold element ── */
+  .stage { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 12px; }
+  .core { width: min(440px, 80vw); aspect-ratio: 1; color: var(--c); transition: color .4s; }
+  .core circle { fill: none; stroke: currentColor; transform-origin: 100px 100px; transition: opacity .4s; }
+  .halo  { stroke-width: .6; opacity: .35; }
+  .r1    { stroke-width: 2.2; stroke-dasharray: 44 10; animation: spin 18s linear infinite; }
+  .r2    { stroke-width: 1;   stroke-dasharray: 2 7;   animation: spin 30s linear infinite reverse; }
+  .r3    { stroke-width: 3.5; stroke-dasharray: 96 30; animation: spin 12s linear infinite; }
+  .heart {
+    fill: currentColor !important; stroke: none !important;
+    transform: scale(calc(.85 + var(--lvl) * 1.6));
+    filter: drop-shadow(0 0 10px currentColor) drop-shadow(0 0 28px currentColor);
+    transition: transform .08s linear;
+  }
+  body[data-state="sleep"] .core { opacity: .38; }
+  body[data-state="sleep"] .core circle { animation-duration: 60s; }
+  body[data-state="wake"] .r1, body[data-state="listen"] .r1 { animation-duration: 4s; }
+  body[data-state="wake"] .r3, body[data-state="listen"] .r3 { animation-duration: 2.5s; }
+  body[data-state="work"] .r1 { animation-duration: 1.2s; }
+  body[data-state="work"] .r3 { animation-duration: .8s; }
+  body[data-state="wake"] .halo { animation: breathe 1.6s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes breathe { 50% { opacity: .9; transform: scale(1.04); } }
+
+  .state { font: 700 15px Orbitron, sans-serif; letter-spacing: .25em; color: var(--c); margin: 18px 0 6px; min-height: 1.2em; }
+  .said  { font-size: 26px; font-weight: 600; max-width: 30ch; min-height: 2.9em; margin: 0; }
+  .heard { color: var(--muted); max-width: 40ch; min-height: 1.45em; margin: 6px 0 0; font-style: italic; }
+
+  .confirm { display: flex; gap: 12px; margin-top: 18px; }
+  .confirm[hidden] { display: none; }
+  .btn {
+    padding: 10px 26px; border: 1px solid var(--c); background: transparent; cursor: pointer;
+    font-weight: 700; font-size: 18px; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  }
+  .btn.yes { background: var(--amber); color: #1A1000; border-color: var(--amber); }
+  .btn:hover { filter: brightness(1.15); }
+
+  /* ── Side panel ── */
+  aside { display: flex; flex-direction: column; gap: 24px; }
+  h2 { font: 700 13px Orbitron, sans-serif; letter-spacing: .2em; color: var(--muted); margin: 0 0 10px; font-weight: 500; }
+
+  .cmd {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%;
+    padding: 14px 18px; margin-bottom: 10px; text-align: left; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--cyan);
+  }
+  .cmd:hover { border-color: var(--cyan); }
+  .cmd b { display: block; font-size: 21px; }
+  .cmd small { color: var(--muted); font-size: 15px; }
+  .cmd .n { font: 700 34px Orbitron, sans-serif; color: var(--cyan); text-align: right; line-height: 1; }
+  .cmd .n small { display: block; font: 500 13px Rajdhani, sans-serif; color: var(--muted); }
+  .cmd[data-zero] { border-left-color: var(--line); }
+  .cmd[data-zero] .n { color: var(--muted); }
+
+  form { display: flex; gap: 8px; }
+  form input {
+    flex: 1; min-width: 0; padding: 10px 14px; background: var(--panel);
+    border: 1px solid var(--line); color: var(--text);
+  }
+  form input::placeholder { color: var(--muted); }
+
+  .log { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .log td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .log td:first-child { color: var(--muted); white-space: nowrap; }
+  .log td:last-child { text-align: right; font-weight: 700; }
+  .empty { color: var(--muted); }
+
+  .mic {
+    position: fixed; right: 24px; bottom: 24px; width: 68px; height: 68px; border-radius: 50%;
+    border: 2px solid var(--c); background: var(--panel); color: var(--c); cursor: pointer;
+    box-shadow: 0 0 24px color-mix(in srgb, var(--c) 45%, transparent);
+  }
+  .mic svg { width: 28px; height: 28px; }
+  .hint { color: var(--muted); font-size: 15px; margin-top: 4px; }
+
+  /* Start screen (browsers need one tap before mic + sound) */
+  .start {
+    position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; text-align: center;
+    background: color-mix(in srgb, var(--void) 92%, transparent); padding: 16px;
+  }
+  .start[hidden] { display: none; }
+  .start p { color: var(--muted); max-width: 36ch; margin: 12px auto 24px; }
+
+  @media (max-width: 820px) {
+    header { padding: 16px; }
+    main { grid-template-columns: 1fr; padding: 16px; gap: 20px; padding-bottom: 110px; }
+    .said { font-size: 22px; }
+    .mic { left: 50%; right: auto; transform: translateX(-50%); width: 76px; height: 76px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .core circle, .halo { animation: none !important; }
+  }
+</style>
+</head>
+<body data-state="sleep">
+
+<div class="start" id="start">
+  <div>
+    <div class="mark">A D S</div>
+    <p>Allow the microphone once. Then double clap and say “Hey A D S”, or use the mic button.</p>
+    <p><input id="keyIn" type="password" placeholder="Portal key" aria-label="Portal key" autocomplete="off"
+      style="padding:10px 14px;background:var(--panel);border:1px solid var(--line);width:min(320px,100%)"></p>
+    <button class="btn" id="startBtn" style="color:var(--cyan)">Start portal</button>
+  </div>
+</div>
+
+<header>
+  <span class="mark">A D S</span>
+  <span class="who">Doctor Al Maraqi</span>
+</header>
+
+<main>
+  <section class="stage">
+    <svg class="core" viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="halo" cx="100" cy="100" r="94"/>
+      <circle class="r1" cx="100" cy="100" r="82"/>
+      <circle class="r2" cx="100" cy="100" r="68"/>
+      <circle class="r3" cx="100" cy="100" r="52"/>
+      <circle class="heart" cx="100" cy="100" r="22"/>
+    </svg>
+    <div class="state" id="stateTxt" aria-live="polite">Asleep</div>
+    <p class="said" id="said" aria-live="polite">Double clap to wake me.</p>
+    <p class="heard" id="heard"></p>
+    <div class="confirm" id="confirmBox" hidden>
+      <button class="btn yes" id="yesBtn">Yes, approve</button>
+      <button class="btn" id="noBtn" style="color:var(--text)">Cancel</button>
+    </div>
+  </section>
+
+  <aside>
+    <div>
+      <h2>Commands</h2>
+      <div id="cmds"><p class="empty">Loading waiting requests…</p></div>
+    </div>
+    <form id="typeForm">
+      <input id="typeIn" placeholder="Type a command, e.g. do the vacations" aria-label="Type a command">
+      <button class="btn" style="color:var(--cyan)">Run</button>
+    </form>
+    <div>
+      <h2>Recent actions</h2>
+      <table class="log"><tbody id="log"><tr><td class="empty">Loading…</td></tr></tbody></table>
+    </div>
+    <p class="hint">Space bar or the mic button skips the clap.</p>
+  </aside>
+</main>
+
+<button class="mic" id="micBtn" aria-label="Speak a command">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+</button>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbzHlHDXIjceNN8Pq2xADF_o_5MdUVKWHxlJDV4diHCwQoFDLJOSNpAiLFn8y-jg6WeQAg/exec';
+const OWNER_SPOKEN = 'Doctor Al Maraqi';
+const WAKE_MS = 15000, COMMAND_MS = 10000, CONFIRM_MS = 8000;
+// Clap tuning (calibration knobs): loudness floor, how much louder than room noise, gap between the two claps
+const CLAP_MIN = 0.3, CLAP_RATIO = 5, CLAP_GAP_MIN = 120, CLAP_GAP_MAX = 700;
+
+const WAKE = /\b(a\.?\s?d\.?\s?s|ads|aids|hades|80s|eighties)\b/i;
+const YES = /\b(yes|yeah|yep|sure|confirm|approve|go ahead|do it|ok|okay)\b/i;
+const NO = /\b(no|nope|cancel|stop|don'?t|wait)\b/i;
+const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves']];
+
+const $ = id => document.getElementById(id);
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let busy = false, rec = null;
+
+function setState(state, label, said) {
+  document.body.dataset.state = state;
+  $('stateTxt').textContent = label;
+  if (said !== undefined) $('said').textContent = said;
+}
+
+const store = { // localStorage can throw (private mode); the key then lasts only this visit
+  get: () => { try { return localStorage.getItem('adsKey') || ''; } catch (e) { return store.mem || ''; } },
+  set: v => { store.mem = v; try { v ? localStorage.setItem('adsKey', v) : localStorage.removeItem('adsKey'); } catch (e) {} }
+};
+
+function call(fn, ...args) {
+  return fetch(API_URL, { method: 'POST', body: JSON.stringify({ key: store.get(), fn, args }) })
+    .then(r => r.json())
+    .then(r => {
+      if (!r.error) return r.result;
+      if (r.error.startsWith('Wrong key')) { store.set(''); $('keyIn').hidden = false; $('start').hidden = false; }
+      throw new Error(r.error);
+    });
+}
+
+function say(text) {
+  $('said').textContent = text;
+  return new Promise(done => {
+    const u = new SpeechSynthesisUtterance(text);
+    const voices = speechSynthesis.getVoices();
+    u.voice = voices.find(v => v.name === 'Google UK English Male') || voices.find(v => v.lang === 'en-GB') || null;
+    u.lang = 'en-GB';
+    const t = setTimeout(done, 1500 + text.length * 90); // Chrome sometimes never fires onend
+    u.onend = () => { clearTimeout(t); done(); };
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  });
+}
+
+// Listens up to ms. Stops early when stopWhen(text) is true, or (no stopWhen) after the first full sentence.
+function listen(ms, stopWhen) {
+  return new Promise(done => {
+    if (!SR) { $('heard').textContent = 'Voice needs Chrome or Edge. Use the buttons or type.'; return done(''); }
+    let text = '';
+    rec = new SR();
+    rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+    const r = rec, t = setTimeout(() => r.stop(), ms);
+    r.onresult = e => {
+      text = [...e.results].map(x => x[0].transcript).join(' ').trim();
+      $('heard').textContent = '“' + text + '”';
+      if (stopWhen ? stopWhen(text) : e.results[e.results.length - 1].isFinal) r.stop();
+    };
+    r.onerror = e => { if (e.error === 'not-allowed') $('heard').textContent = 'Microphone is blocked. Allow it in the address bar.'; };
+    r.onend = () => { clearTimeout(t); rec = null; done(text); };
+    r.start();
+  });
+}
+
+// Runs one voice session; ignores new triggers while busy, always returns to sleep
+async function session(fn) {
+  if (busy) return;
+  busy = true;
+  $('heard').textContent = '';
+  try { await fn(); }
+  catch (err) { setState('error', 'Error'); await say(err.message || String(err)); }
+  finally {
+    busy = false;
+    setTimeout(() => { if (!busy) setState('sleep', 'Asleep', 'Double clap to wake me.'); }, 2500);
+  }
+}
+
+const wakeUp = () => session(async () => {
+  setState('wake', 'Listening for “Hey A D S”', 'Say “Hey A D S”.');
+  const t = await listen(WAKE_MS, s => WAKE.test(s));
+  if (!WAKE.test(t)) return;
+  setState('listen', 'Speaking');
+  await say(`Welcome back, ${OWNER_SPOKEN}. How can I help?`);
+  await askCommand();
+});
+
+const micPressed = () => session(() => { setState('listen', 'Speaking'); return say('Yes?').then(askCommand); });
+
+async function askCommand() {
+  setState('listen', 'Listening for a command');
+  const t = await listen(COMMAND_MS);
+  await handle(t);
+}
+
+async function handle(text) {
+  const m = MATCH.find(([re]) => re.test(text));
+  if (m) return runFlow(m[1]);
+  setState('error', 'Not a command');
+  await say(text ? 'I know two commands: do the vacations, and do the sick leaves.' : 'I didn’t hear anything.');
+}
+
+async function runFlow(key) {
+  setState('work', 'Checking');
+  const p = await call('previewCommand', key);
+  if (!p.count) { setState('done', 'Nothing waiting'); await say(`No ${p.noun} waiting.`); return; }
+  setState('confirm', 'Waiting for your answer');
+  if (!await askConfirm(`Found ${p.count} ${p.noun}. Are you sure?`)) {
+    setState('sleep', 'Cancelled');
+    await say('Cancelled. Nothing was changed.');
+    return;
+  }
+  setState('work', 'Approving');
+  const r = await call('runCommand', key);
+  setState('done', 'Done');
+  await say(r.count ? `${r.count} ${r.noun} approved.` : `No ${r.noun} waiting any more.`);
+  refresh();
+}
+
+// Voice "yes"/"no" or the buttons, whichever comes first. Silence = no.
+function askConfirm(question) {
+  return new Promise(async done => {
+    let finished = false;
+    const finish = v => {
+      if (finished) return;
+      finished = true;
+      $('confirmBox').hidden = true;
+      if (rec) rec.stop();
+      done(v);
+    };
+    $('yesBtn').onclick = () => finish(true);
+    $('noBtn').onclick = () => finish(false);
+    $('confirmBox').hidden = false;
+    await say(question);
+    if (finished) return;
+    const t = await listen(CONFIRM_MS, s => YES.test(s) || NO.test(s));
+    finish(!NO.test(t) && YES.test(t));
+  });
+}
+
+// Double-clap detector. Runs in the browser only; no audio is sent anywhere.
+async function startClapDetector() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+  });
+  const ctx = new AudioContext();
+  const src = ctx.createMediaStreamSource(stream);
+  const proc = ctx.createScriptProcessor(1024, 1, 1); // keeps running when the tab is in the background
+  let room = 0.01, lastPeakAt = 0, firstClapAt = 0;
+  proc.onaudioprocess = e => {
+    const buf = e.inputBuffer.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
+    document.body.style.setProperty('--lvl', Math.min(peak * 2, 1).toFixed(2));
+    const now = performance.now();
+    if (!busy && peak > CLAP_MIN && peak > room * CLAP_RATIO && now - lastPeakAt > CLAP_GAP_MIN) {
+      lastPeakAt = now;
+      const gap = now - firstClapAt;
+      if (gap > CLAP_GAP_MIN && gap < CLAP_GAP_MAX) { firstClapAt = 0; wakeUp(); }
+      else firstClapAt = now;
+    }
+    room = room * 0.97 + peak * 0.03;
+  };
+  src.connect(proc);
+  proc.connect(ctx.destination); // output stays silent; Chrome only runs the processor when connected
+}
+
+function refresh() {
+  call('getStatus').then(s => {
+    $('cmds').innerHTML = '';
+    s.commands.forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'cmd';
+      if (!c.waiting) b.dataset.zero = '';
+      b.innerHTML = `<span><b></b><small></small></span><span class="n">${c.waiting}<small>waiting</small></span>`;
+      b.querySelector('b').textContent = '“' + c.name + '”';
+      b.querySelector('small').textContent = c.app;
+      b.onclick = () => session(() => runFlow(c.key));
+      $('cmds').append(b);
+    });
+    $('log').innerHTML = '';
+    if (!s.recent.length) $('log').innerHTML = '<tr><td class="empty">No portal actions yet.</td></tr>';
+    s.recent.forEach(r => {
+      const tr = document.createElement('tr');
+      [r[0], r[1], r[3]].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); });
+      $('log').append(tr);
+    });
+  }).catch(err => { $('cmds').innerHTML = ''; $('cmds').textContent = 'Could not read the sheets: ' + err.message; });
+}
+
+$('keyIn').hidden = !!store.get();
+$('startBtn').onclick = async () => {
+  if (!store.get()) {
+    const k = $('keyIn').value.trim();
+    if (!k) return $('keyIn').focus();
+    store.set(k);
+  }
+  $('keyIn').hidden = true;
+  $('start').hidden = true;
+  refresh();
+  speechSynthesis.getVoices();
+  try { await startClapDetector(); }
+  catch (e) { $('heard').textContent = `No microphone access (${e.name}: ${e.message}). Clap is off; use the buttons or type.`; }
+};
+$('micBtn').onclick = micPressed;
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); micPressed(); }
+});
+$('typeForm').onsubmit = e => {
+  e.preventDefault();
+  const t = $('typeIn').value.trim();
+  if (!t) return;
+  $('typeIn').value = '';
+  session(() => handle(t));
+};
+
+setInterval(() => { if (!busy) refresh(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
