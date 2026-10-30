@@ -224,7 +224,7 @@ const NO = /\b(no|nope|cancel|stop|don'?t|wait)\b/i;
 const STANDBY = /\bstand\s?-?by\b/i;
 const THANKS = /\b(thank you|thanks|thank u)\b/i;
 const REFRESH = /\b(refresh|update)\b/i;
-const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves']];
+const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves'], [/we+k\s?-?end/i, 'weekend']];
 
 const $ = id => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -357,7 +357,7 @@ async function act(text) {
 async function handle(text) {
   if (await act(text)) return;
   setState('error', 'Not a command');
-  await say(text ? 'I know three commands: do the vacations, do the sick leaves, and refresh.' : 'I didn’t hear anything.');
+  await say(text ? 'I know four commands: do the vacations, do the sick leaves, do the weekend duty, and refresh.' : 'I didn’t hear anything.');
 }
 
 // Read-only: reloads the counts and reads them out
