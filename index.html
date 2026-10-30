@@ -305,12 +305,16 @@ const wakeUp = () => session(async () => {
   setState('wake', 'Listening for “Hey Jarvis”', 'Say “Hey Jarvis”.');
   const t = await listen(WAKE_MS, s => WAKE.test(s));
   if (!WAKE.test(t)) return;
+  await greet();
+});
+
+const micPressed = () => session(greet);
+
+async function greet() {
   setState('listen', 'Speaking');
   await say(`Welcome back, ${OWNER_SPOKEN}. How can I help?`);
   await stayAwake();
-});
-
-const micPressed = () => session(() => { setState('listen', 'Speaking'); return say('Yes?').then(stayAwake); });
+}
 
 // Awake for AWAKE_MS after the last command or "thank you": no clap or wake word needed.
 // Other speech (people talking nearby) is ignored.
