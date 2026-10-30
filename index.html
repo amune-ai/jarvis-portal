@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A D S Command Portal</title>
+<title>Jarvis Command Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -42,7 +42,7 @@
     display: flex; align-items: baseline; gap: 16px;
     padding: 20px 28px; border-bottom: 1px solid var(--line);
   }
-  .mark { font: 700 22px Orbitron, sans-serif; letter-spacing: .5em; color: var(--cyan); }
+  .mark { font: 700 22px Orbitron, sans-serif; letter-spacing: .35em; color: var(--cyan); }
   .who { color: var(--muted); margin-left: auto; }
 
   main {
@@ -151,8 +151,8 @@
 
 <div class="start" id="start">
   <div>
-    <div class="mark">A D S</div>
-    <p>Allow the microphone once. Then double clap and say “Hey A D S”, or use the mic button.</p>
+    <div class="mark">JARVIS</div>
+    <p>Allow the microphone once. Then double clap and say “Hey Jarvis”, or use the mic button.</p>
     <p><input id="keyIn" type="password" placeholder="Portal key" aria-label="Portal key" autocomplete="off"
       style="padding:10px 14px;background:var(--panel);border:1px solid var(--line);width:min(320px,100%)"></p>
     <button class="btn" id="startBtn" style="color:var(--cyan)">Start portal</button>
@@ -160,7 +160,7 @@
 </div>
 
 <header>
-  <span class="mark">A D S</span>
+  <span class="mark">JARVIS</span>
   <span class="who">Doctor Al Maraqi</span>
 </header>
 
@@ -216,7 +216,7 @@ const WAKE_MS = 15000, COMMAND_MS = 10000, CONFIRM_MS = 8000;
 const CLAP_RATIO = 3, CLAP_GAP_MIN = 120, CLAP_GAP_MAX = 900;
 let clapMin;
 
-const WAKE = /\b(a\.?\s?d\.?\s?s|ads|aids|hades|80s|eighties)\b/i;
+const WAKE = /\b(jarvis|jarvi|javis|jervis|jarves|travis)\b/i;
 const YES = /\b(yes|yeah|yep|sure|confirm|approve|go ahead|do it|ok|okay)\b/i;
 const NO = /\b(no|nope|cancel|stop|don'?t|wait)\b/i;
 const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves']];
@@ -293,7 +293,7 @@ async function session(fn) {
 }
 
 const wakeUp = () => session(async () => {
-  setState('wake', 'Listening for “Hey A D S”', 'Say “Hey A D S”.');
+  setState('wake', 'Listening for “Hey Jarvis”', 'Say “Hey Jarvis”.');
   const t = await listen(WAKE_MS, s => WAKE.test(s));
   if (!WAKE.test(t)) return;
   setState('listen', 'Speaking');
