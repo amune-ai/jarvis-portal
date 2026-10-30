@@ -212,6 +212,7 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbzHlHDXIjceNN8Pq2xADF_o_5MdUVKWHxlJDV4diHCwQoFDLJOSNpAiLFn8y-jg6WeQAg/exec';
 const OWNER_SPOKEN = 'Doctor Al Maraaki'; // spelled for the voice's pronunciation
 const WAKE_MS = 15000, AWAKE_MS = 3 * 60 * 1000, CONFIRM_MS = 8000;
+const PHONE_SILENCE_MS = 30000; // phone: keep listening this long without hearing anything, then sleep
 // Clap tuning (calibration knobs): loudness floor, how much louder than room noise, gap between the two claps
 // Sensitivity 1..10 (slider, saved per device) sets the loudness floor: 7 → 0.185, 10 → 0.05
 const CLAP_RATIO = 3, CLAP_GAP_MIN = 120;
@@ -320,13 +321,17 @@ async function greet() {
 // Awake for AWAKE_MS after the last command or "thank you": no clap or wake word needed.
 // Other speech (people talking nearby) is ignored.
 async function stayAwake() {
-  let until = Date.now() + AWAKE_MS;
+  let until = Date.now() + AWAKE_MS, heardAt = Date.now();
   while (Date.now() < until) {
     setState('listen', 'Listening', 'Say a command, “thank you”, or “stand by Jarvis”.');
     const started = Date.now();
     const t = await listen(until - Date.now());
-    // Silence on a phone ends the session (each new listen beeps on Android); on desktop only a dead mic does
-    if (!t && (PHONE || Date.now() - started < 1000)) break;
+    if (!t) {
+      // Android stops listening after a few quiet seconds (with a beep); start again until PHONE_SILENCE_MS of quiet
+      if (PHONE ? Date.now() - heardAt > PHONE_SILENCE_MS : Date.now() - started < 1000) break;
+      continue;
+    }
+    heardAt = Date.now();
     if (await act(t)) until = Date.now() + AWAKE_MS;
     else if (STANDBY.test(t)) {
       setState('listen', 'Speaking');
