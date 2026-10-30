@@ -222,6 +222,7 @@ const YES = /\b(yes|yeah|yep|sure|confirm|approve|go ahead|do it|ok|okay)\b/i;
 const NO = /\b(no|nope|cancel|stop|don'?t|wait)\b/i;
 const STANDBY = /\bstand\s?-?by\b/i;
 const THANKS = /\b(thank you|thanks|thank u)\b/i;
+const REFRESH = /\b(refresh|update)\b/i;
 const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves']];
 
 const $ = id => document.getElementById(id);
@@ -326,8 +327,7 @@ async function stayAwake() {
     const t = await listen(until - Date.now());
     // Silence on a phone ends the session (each new listen beeps on Android); on desktop only a dead mic does
     if (!t && (PHONE || Date.now() - started < 1000)) break;
-    const m = MATCH.find(([re]) => re.test(t));
-    if (m) { await runFlow(m[1]); until = Date.now() + AWAKE_MS; }
+    if (await act(t)) until = Date.now() + AWAKE_MS;
     else if (STANDBY.test(t)) {
       setState('listen', 'Speaking');
       await say('Standing by.');
@@ -341,11 +341,27 @@ async function stayAwake() {
   }
 }
 
-async function handle(text) {
+// Runs a spoken or typed command; false if the text isn't one
+async function act(text) {
+  if (REFRESH.test(text)) { await refreshFlow(); return true; }
   const m = MATCH.find(([re]) => re.test(text));
-  if (m) return runFlow(m[1]);
+  if (m) { await runFlow(m[1]); return true; }
+  return false;
+}
+
+async function handle(text) {
+  if (await act(text)) return;
   setState('error', 'Not a command');
-  await say(text ? 'I know two commands: do the vacations, and do the sick leaves.' : 'I didn’t hear anything.');
+  await say(text ? 'I know three commands: do the vacations, do the sick leaves, and refresh.' : 'I didn’t hear anything.');
+}
+
+// Read-only: reloads the counts and reads them out
+async function refreshFlow() {
+  setState('work', 'Refreshing');
+  const s = await refresh();
+  if (!s) throw new Error('I could not read the sheets.');
+  setState('done', 'Up to date');
+  await say(s.commands.map(c => `${c.waiting || 'No'} ${c.noun}`).join(' and ') + ' waiting.');
 }
 
 async function runFlow(key) {
@@ -412,7 +428,7 @@ async function startClapDetector() {
 }
 
 function refresh() {
-  call('getStatus').then(s => {
+  return call('getStatus').then(s => {
     $('cmds').innerHTML = '';
     s.commands.forEach(c => {
       const b = document.createElement('button');
@@ -431,6 +447,7 @@ function refresh() {
       [r[0], r[1], r[3]].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); });
       $('log').append(tr);
     });
+    return s;
   }).catch(err => { $('cmds').innerHTML = ''; $('cmds').textContent = 'Could not read the sheets: ' + err.message; });
 }
 
