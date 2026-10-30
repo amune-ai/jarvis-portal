@@ -211,7 +211,7 @@
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbzHlHDXIjceNN8Pq2xADF_o_5MdUVKWHxlJDV4diHCwQoFDLJOSNpAiLFn8y-jg6WeQAg/exec';
 const OWNER_SPOKEN = 'Doctor Al Maraaki'; // spelled for the voice's pronunciation
-const WAKE_MS = 15000, AWAKE_MS = 3 * 60 * 1000, CONFIRM_MS = 8000;
+const WAKE_MS = 15000, AWAKE_MS = 3 * 60 * 1000, CONFIRM_MS = 30000;
 const PHONE_SILENCE_MS = 30000; // phone: keep listening this long without hearing anything, then sleep
 // Clap tuning (calibration knobs): loudness floor, how much louder than room noise, gap between the two claps
 // Sensitivity 1..10 (slider, saved per device) sets the loudness floor: 7 → 0.185, 10 → 0.05
@@ -402,7 +402,14 @@ function askConfirm(question) {
     $('confirmBox').hidden = false;
     await say(question);
     if (finished) return;
-    const t = await listen(CONFIRM_MS, s => YES.test(s) || NO.test(s));
+    // Keep asking the phone to listen (it stops after a few quiet seconds) until an answer or CONFIRM_MS
+    const end = Date.now() + CONFIRM_MS, answered = s => YES.test(s) || NO.test(s);
+    let t = '';
+    while (!finished && !answered(t) && Date.now() < end) {
+      const started = Date.now();
+      t = await listen(end - Date.now(), answered);
+      if (!t && !PHONE && Date.now() - started < 1000) break; // dead mic
+    }
     finish(!NO.test(t) && YES.test(t));
   });
 }
