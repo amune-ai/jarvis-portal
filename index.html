@@ -132,6 +132,8 @@
   .sens[hidden] { display: none; }
   .sens input { flex: 1; accent-color: var(--cyan); }
   .sens output { font: 700 18px Orbitron, sans-serif; color: var(--cyan); width: 2ch; }
+  .linkbtn { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; align-self: flex-start; }
+  .linkbtn:hover { color: var(--cyan); }
   .hint { color: var(--muted); font-size: 15px; margin-top: 4px; }
 
   /* Start screen (browsers need one tap before mic + sound) */
@@ -207,6 +209,7 @@
       <output id="sensOut"></output>
     </label>
     <p class="hint" id="clapHint">Not hearing your claps? Move it right. Waking by itself? Move it left. Space bar or the mic button skips the clap.</p>
+    <button class="linkbtn" id="changeKey">Change key on this device</button>
   </aside>
 </main>
 
@@ -238,7 +241,7 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 // Phones: Android gives the mic to one user at a time, so the clap detector would starve speech
 // recognition. Phones use the mic button only, and each listen is one sentence.
 const PHONE = matchMedia('(pointer: coarse)').matches;
-let busy = false, rec = null;
+let busy = false, rec = null, clapOn = false;
 
 function setState(state, label, said) {
   document.body.dataset.state = state;
@@ -531,10 +534,13 @@ $('startBtn').onclick = async () => {
     setState('sleep', 'Asleep', 'Tap the mic to talk.');
     return;
   }
+  if (clapOn) return; // "Change key" brings this screen back; one detector is enough
+  clapOn = true;
   try { await startClapDetector(); }
   catch (e) { $('heard').textContent = `No microphone access (${e.name}: ${e.message}). Clap is off; use the buttons or type.`; }
 };
 $('micBtn').onclick = micPressed;
+$('changeKey').onclick = () => { store.set(''); $('keyIn').value = ''; $('keyIn').hidden = false; $('start').hidden = false; $('keyIn').focus(); };
 document.addEventListener('keydown', e => {
   if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); micPressed(); }
 });
