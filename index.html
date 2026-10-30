@@ -223,6 +223,7 @@ const YES = /\b(yes|yeah|yep|sure|confirm|approve|go ahead|do it|ok|okay)\b/i;
 const NO = /\b(no|nope|cancel|stop|don'?t|wait)\b/i;
 const STANDBY = /\bstand\s?-?by\b/i;
 const THANKS = /\b(thank you|thanks|thank u)\b/i;
+const UNDO = /\bundo\b/i;
 const REFRESH = /\b(refresh|update)\b/i;
 const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves'], [/we+k\s?-?end/i, 'weekend']];
 
@@ -348,6 +349,7 @@ async function stayAwake() {
 
 // Runs a spoken or typed command; false if the text isn't one
 async function act(text) {
+  if (UNDO.test(text)) { await undoFlow(); return true; }
   if (REFRESH.test(text)) { await refreshFlow(); return true; }
   const m = MATCH.find(([re]) => re.test(text));
   if (m) { await runFlow(m[1]); return true; }
@@ -357,7 +359,26 @@ async function act(text) {
 async function handle(text) {
   if (await act(text)) return;
   setState('error', 'Not a command');
-  await say(text ? 'I know four commands: do the vacations, do the sick leaves, do the weekend duty, and refresh.' : 'I didn’t hear anything.');
+  await say(text ? 'I know these commands: do the vacations, do the sick leaves, do the weekend duty, refresh, and undo.' : 'I didn’t hear anything.');
+}
+
+// Puts back the cells changed by the last approval run (rows changed since are left alone)
+async function undoFlow() {
+  setState('work', 'Checking');
+  const p = await call('previewUndo');
+  if (!p.count) { setState('done', 'Nothing to undo'); await say('There is nothing to undo.'); return; }
+  setState('confirm', 'Waiting for your answer');
+  if (!await askConfirm(`Undo the last ${p.name}: ${p.count} ${p.noun}. Are you sure?`)) {
+    setState('sleep', 'Cancelled');
+    await say('Cancelled. Nothing was changed.');
+    return;
+  }
+  setState('work', 'Undoing');
+  const r = await call('runUndo');
+  setState('done', 'Done');
+  await say(`${r.count} ${r.noun} undone.` +
+    (r.skipped ? ` ${r.skipped} had been changed since, so I left ${r.skipped === 1 ? 'it' : 'them'} as ${r.skipped === 1 ? 'it is' : 'they are'}.` : ''));
+  refresh();
 }
 
 // Read-only: reloads the counts and reads them out
