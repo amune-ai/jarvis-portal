@@ -17,12 +17,15 @@
     --amber: #FFB547;
     --green: #4CFFA0;
     --red: #FF5C6C;
+    --yellow: #FFE14A;
     --c: var(--cyan);   /* current state colour */
     --lvl: 0;           /* live mic level 0..1 */
   }
   body[data-state="confirm"] { --c: var(--amber); }
   body[data-state="done"]    { --c: var(--green); }
   body[data-state="error"]   { --c: var(--red); }
+  body[data-state="approve"] { --c: var(--yellow); }  /* after "yes": writing to the sheet */
+  body[data-state="standby"] { --c: var(--red); }     /* after "stand by", until woken */
 
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; }
@@ -68,8 +71,10 @@
   body[data-state="sleep"] .core circle { animation-duration: 60s; }
   body[data-state="wake"] .r1, body[data-state="listen"] .r1 { animation-duration: 4s; }
   body[data-state="wake"] .r3, body[data-state="listen"] .r3 { animation-duration: 2.5s; }
-  body[data-state="work"] .r1 { animation-duration: 1.2s; }
-  body[data-state="work"] .r3 { animation-duration: .8s; }
+  body[data-state="work"] .r1, body[data-state="approve"] .r1 { animation-duration: 1.2s; }
+  body[data-state="work"] .r3, body[data-state="approve"] .r3 { animation-duration: .8s; }
+  body[data-state="standby"] .core { opacity: .6; }
+  body[data-state="standby"] .core circle { animation-duration: 40s; }
   body[data-state="wake"] .halo { animation: breathe 1.6s ease-in-out infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes breathe { 50% { opacity: .9; transform: scale(1.04); } }
@@ -309,7 +314,7 @@ async function session(fn) {
   catch (err) { setState('error', 'Error'); await say(err.message || String(err)); }
   finally {
     busy = false;
-    setTimeout(() => { if (!busy) setState('sleep', 'Asleep', PHONE ? 'Tap the mic to talk.' : 'Clap to wake me.'); }, 2500);
+    setTimeout(() => { if (!busy && document.body.dataset.state !== 'standby') setState('sleep', 'Asleep', PHONE ? 'Tap the mic to talk.' : 'Clap to wake me.'); }, 2500);
   }
 }
 
@@ -344,7 +349,7 @@ async function stayAwake() {
     heardAt = Date.now();
     if (await act(t)) until = Date.now() + AWAKE_MS;
     else if (STANDBY.test(t)) {
-      setState('listen', 'Speaking');
+      setState('standby', 'Standing by');
       await say('Standing by.');
       break;
     }
@@ -382,7 +387,7 @@ async function undoFlow() {
     await say('Cancelled. Nothing was changed.');
     return;
   }
-  setState('work', 'Undoing');
+  setState('approve', 'Undoing');
   const r = await call('runUndo');
   setState('done', 'Done');
   await say(`${r.count} ${r.noun} undone.` +
@@ -411,7 +416,7 @@ async function runFlow(key) {
     await say('Cancelled. Nothing was changed.');
     return;
   }
-  setState('work', 'Approving');
+  setState('approve', 'Approving');
   const r = await call('runCommand', key, p.tokens);
   setState('done', 'Done');
   await say((r.count ? `${r.count} ${r.noun} approved.` : `No ${r.noun} approved.`) +
