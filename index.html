@@ -239,7 +239,7 @@ const STANDBY = /\b(stand|chand)\s?-?(by|bhai)\b/i; // "stand bhai", "chand bhai
 const THANKS = /\b(thank you|thanks|thank u)\b/i;
 const UNDO = /\b(undo|anju|andu)\b/i; // anju, andu: how speech recognition sometimes hears "undo"
 const REFRESH = /\b(refresh|update)\b/i;
-const SUMMARY = /\b(what (do )?we have today|summar(y|i[sz]e|ise))\b/i;
+const SUMMARY = /\b(to\s?day|summar(y|i[sz]e|ise))\b/i; // any sentence with "today" (read only, so a broad match is safe)
 const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves'], [/we+k\s?-?end/i, 'weekend']];
 
 const $ = id => document.getElementById(id);
