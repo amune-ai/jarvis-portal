@@ -235,7 +235,7 @@ let clapMin;
 const WAKE = /\b(jarvis|jarvi|javis|jervis|jarves|travis)\b/i;
 const YES = /\b(yes|yeah|yep|sure|confirm|approve|go ahead|do it|ok|okay)\b/i;
 const NO = /\b(no|nope|cancel|stop|don'?t|wait)\b/i;
-const STANDBY = /\bstand\s?-?(by|bhai)\b/i; // "stand bhai": how speech recognition sometimes hears "stand by"
+const STANDBY = /\b(stand|chand)\s?-?(by|bhai)\b/i; // "stand bhai", "chand bhai": how speech recognition sometimes hears "stand by"
 const THANKS = /\b(thank you|thanks|thank u)\b/i;
 const UNDO = /\b(undo|anju|andu)\b/i; // anju, andu: how speech recognition sometimes hears "undo"
 const REFRESH = /\b(refresh|update)\b/i;
