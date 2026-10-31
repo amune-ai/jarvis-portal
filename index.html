@@ -24,7 +24,7 @@
   body[data-state="confirm"] { --c: var(--amber); }
   body[data-state="done"]    { --c: var(--green); }
   body[data-state="error"]   { --c: var(--red); }
-  body[data-state="approve"] { --c: var(--yellow); }  /* after "yes": writing to the sheet */
+  body[data-state="approve"] { --c: var(--yellow); }  /* after "yes" (writing to the sheet) and while refreshing */
   body[data-state="standby"] { --c: var(--red); }     /* after "stand by", until woken */
 
   * { box-sizing: border-box; }
@@ -397,7 +397,7 @@ async function undoFlow() {
 
 // Read-only: reloads the counts and reads them out
 async function refreshFlow() {
-  setState('work', 'Refreshing');
+  setState('approve', 'Refreshing');
   const s = await refresh();
   if (!s) throw new Error('I could not read the sheets.');
   setState('done', 'Up to date');
