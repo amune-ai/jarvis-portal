@@ -239,6 +239,7 @@ const STANDBY = /\b(stand|chand)\s?-?(by|bhai)\b/i; // "stand bhai", "chand bhai
 const THANKS = /\b(thank you|thanks|thank u)\b/i;
 const UNDO = /\b(undo|anju|andu)\b/i; // anju, andu: how speech recognition sometimes hears "undo"
 const REFRESH = /\b(refresh|update)\b/i;
+const SUMMARY = /\b(what (do )?we have today|summar(y|i[sz]e|ise))\b/i;
 const MATCH = [[/vacation/i, 'vacations'], [/sick/i, 'sickleaves'], [/we+k\s?-?end/i, 'weekend']];
 
 const $ = id => document.getElementById(id);
@@ -364,6 +365,7 @@ async function stayAwake() {
 // Runs a spoken or typed command; false if the text isn't one
 async function act(text) {
   if (UNDO.test(text)) { await undoFlow(); return true; }
+  if (SUMMARY.test(text)) { await refreshFlow(true); return true; }
   if (REFRESH.test(text)) { await refreshFlow(); return true; }
   const m = MATCH.find(([re]) => re.test(text));
   if (m) { await runFlow(m[1]); return true; }
@@ -373,7 +375,7 @@ async function act(text) {
 async function handle(text) {
   if (await act(text)) return;
   setState('error', 'Not a command');
-  await say(text ? 'I know these commands: do the vacations, do the sick leaves, do the weekend duty, refresh, and undo.' : 'I didn’t hear anything.');
+  await say(text ? 'I know these commands: do the vacations, do the sick leaves, do the weekend duty, refresh, summarize, and undo.' : 'I didn’t hear anything.');
 }
 
 // Puts back the cells changed by the last approval run (rows changed since are left alone)
@@ -395,15 +397,23 @@ async function undoFlow() {
   refresh();
 }
 
-// Read-only: reloads the counts and reads them out
-async function refreshFlow() {
+// Read-only: reloads the counts and reads them out ("summarize" uses the longer "We have a total of…" form)
+async function refreshFlow(summary) {
   setState('approve', 'Refreshing');
   const s = await refresh();
   if (!s) throw new Error('I could not read the sheets.');
   setState('done', 'Up to date');
   const bad = s.commands.filter(c => typeof c.waiting !== 'number');
-  await say(s.commands.filter(c => !bad.includes(c)).map(c => `${c.waiting || 'No'} ${c.noun}`).join(' and ') + ' waiting.' +
+  const ok = s.commands.filter(c => !bad.includes(c));
+  await say((summary ? summaryText(ok) : ok.map(c => `${c.waiting || 'No'} ${c.noun}`).join(' and ') + ' waiting.') +
     bad.map(c => ' ' + c.app).join(''));
+}
+
+function summaryText(cmds) {
+  const parts = cmds.map(c => c.waiting ? `a total of ${c.waiting} ${c.noun}` : `no ${c.noun}`);
+  if (!parts.length) return '';
+  const list = parts.length > 1 ? parts.slice(0, -1).join(', ') + ', and ' + parts.at(-1) : parts[0];
+  return `We have ${list}.`;
 }
 
 async function runFlow(key) {
